@@ -7,4 +7,4 @@ https://potato167.github.io/codeforces-vs/
 その他すべて : ChatGPT
 
 
-![](img/a.png)
+![](img/b.png)
