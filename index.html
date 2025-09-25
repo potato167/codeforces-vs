@@ -73,12 +73,13 @@
 				<div class="kicker">
 					<div class="row" id="status"><span class="muted">ハンドルを入力して「比較する」を押してください。</span></div>
 					<div class="actions">
-						<button id="toggleSort" class="btn secondary" title="日時の並び順を切り替え">日時: 旧→新</button>
-						<button id="filterA" class="btn secondary" title="A が勝っているコンテストのみ表示">A勝ちのみ: OFF</button>
-						<button id="filterB" class="btn secondary" title="B が勝っているコンテストのみ表示">B勝ちのみ: OFF</button>
-						<input id="monthsN" class="mini" placeholder="直近Nヶ月" inputmode="numeric" title="空 or 不正値なら全期間" />
-						<button id="share" class="btn secondary" title="URL にハンドルを埋め込んで共有">共有リンク</button>
-					</div>
+          <button id="toggleSort" class="btn secondary" title="日時の並び順を切り替え">日時: 旧→新</button>
+          <button id="filterA" class="btn secondary" title="A が勝っているコンテストのみ表示">A勝ちのみ: OFF</button>
+          <button id="filterB" class="btn secondary" title="B が勝っているコンテストのみ表示">B勝ちのみ: OFF</button>
+          <input id="monthsN" class="mini" placeholder="直近Nヶ月" inputmode="numeric" title="空 or 不正値なら全期間" />
+          <button id="tweet" class="btn secondary" title="Twitter で結果を共有">X/Twitter</button>
+          <button id="share" class="btn secondary" title="URL にハンドルを埋め込んで共有">共有リンク</button>
+        </div>
 				</div>
 				<div class="summary" id="summary" hidden>
 					<span class="pill" id="sum-overlap"></span>
@@ -125,6 +126,7 @@
 			const btnCompare = qs('#compare');
 			const btnSwap = qs('#swap');
 			const btnShare = qs('#share');
+    const btnTweet = qs('#tweet');
 			const btnSort = qs('#toggleSort');
 			const btnFilter = qs('#filterA');
 			const btnFilterB = qs('#filterB');
@@ -395,6 +397,36 @@
 
 			// 月フィルタの入力で即時反映
 			inpMonths?.addEventListener('input', renderTable);
+
+    // X/Twitter 共有
+    btnTweet?.addEventListener('click', () => {
+      const a = h1.value.trim();
+      const b = h2.value.trim();
+      if(!a || !b){ setStatus('<span class="error">まず 2 つのハンドルで比較してください。</span>'); return; }
+
+      let rows = [...(compare._rows || [])];
+      let cutoffMs = null;
+      if (typeof getCutoffMs === 'function') cutoffMs = getCutoffMs();
+      if (cutoffMs !== null) rows = rows.filter(r => (r.time*1000) >= cutoffMs);
+
+      let winA = 0, winB = 0;
+      for(const r of rows){ if(r.rankA < r.rankB) winA++; else if(r.rankA > r.rankB) winB++; }
+	  if(rows.length === 0){ setStatus('<span class="error">共通コンテストがありません</span>'); return; }
+      let text = '';
+      if(rows.length === 0){
+        text = `${a} vs ${b} は共通コンテストがありませんでした`;
+      }else if(winA === winB){
+        text = `${a} vs ${b}` + "\n" `${winA} 勝 ${winB} 敗で引き分けです！`;
+      }else{
+        const winner = winA > winB ? a : b;
+        text = `${a} vs ${b}` + "\n" + `${winA} 勝 ${winB} 敗で ${winner} の勝ちです！`;
+      }
+
+	  text = "codeforces じゃんけん" + "\n" + text;
+	  let url = "https://potato167.github.io/codeforces-vs/"
+      const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${url}`;
+      window.open(intent, '_blank', 'noopener');
+    });
 
 			// Auto-run if both present
 			if(h1.value && h2.value){ compare(); };
