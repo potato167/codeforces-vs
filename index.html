@@ -422,7 +422,7 @@
         text = `${a} vs ${b}` + "\n" + `${winA} 勝 ${winB} 敗で ${winner} の勝ちです！`;
       }
 
-	  text = "Codeforces じゃんけん" + "\n" + text;
+	  text = "Codeforces じゃんけん" + "\n" + text + "\n";
 	  let url = "https://potato167.github.io/codeforces-vs/"
       const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${url}`;
       window.open(intent, '_blank', 'noopener');
