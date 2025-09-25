@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Codeforces 直接対決チェッカー</title>
+		<meta
+			name="description"
+			content="Codeforces の 2 ユーザーの直接対決（共通参加コンテスト）の勝敗と戦績を表示するツール"
+		/>
+		<style>
+			:root{
+				--bg:#0b1020; --card:#131a31; --muted:#9aa3b2; --fg:#e6ebf5; --accent:#6ea8fe; --good:#2bd67b; --bad:#ff7180; --warn:#f7b955;
+			}
+			*{box-sizing:border-box}
+			body{margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans",sans-serif; background:var(--bg); color:var(--fg);}
+			header{padding:24px 16px; text-align:center;}
+			header h1{margin:0 0 8px; font-size:clamp(1.25rem, 2.5vw, 1.8rem)}
+			header p{margin:0; color:var(--muted)}
+			.container{max-width:1100px; margin:0 auto; padding:16px;}
+			.card{background:var(--card); border:1px solid #202844; border-radius:16px; padding:16px; box-shadow:0 6px 20px rgba(0,0,0,.25)}
+			.grid{display:grid; gap:12px}
+			.inputs{grid-template-columns:1fr auto 1fr; align-items:center}
+			.inputs input{width:100%; padding:12px 14px; border-radius:12px; border:1px solid #2a345c; background:#0e1530; color:var(--fg)}
+			.inputs input::placeholder{color:#6b7280}
+			.inputs .swap{display:flex; flex-direction:column; gap:8px; align-items:center}
+			.btn{cursor:pointer; border:none; border-radius:12px; padding:10px 16px; background:var(--accent); color:#0b1020; font-weight:600}
+			.btn.secondary{background:#233059; color:var(--fg); border:1px solid #32406a}
+			.actions{display:flex; gap:8px; flex-wrap:wrap}
+			.actions input.mini{width:120px; padding:10px 12px; border-radius:10px; border:1px solid #32406a; background:#0e1530; color:var(--fg)}
+			.summary{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+			.pill{padding:6px 10px; border-radius:999px; font-weight:600; border:1px solid #2a345c; background:#0e1530}
+			.pill.good{border-color:#1d9f5a; color:var(--good)}
+			.pill.bad{border-color:#b54b56; color:var(--bad)}
+			.pill.warn{border-color:#8c6a2e; color:var(--warn)}
+			.muted{color:var(--muted)}
+			.table-wrap{overflow:auto; border-radius:12px; border:1px solid #223058}
+			table{width:100%; border-collapse:collapse; min-width:720px}
+			th,td{padding:10px 12px; border-bottom:1px solid #1f294a; text-align:left}
+			th{position:sticky; top:0; background:#0f1733; z-index:1}
+			tr:hover td:not(.winner){background:#0e1530}
+			.rank{font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1}
+			.winner{font-weight:700; background:#11Aa1d; border-radius:6px}
+			.tag{padding:2px 6px; border-radius:6px; border:1px solid #32406a; background:#0e1530; color:var(--muted); font-size:.85em}
+			.footer{color:var(--muted); text-align:center; padding:24px}
+			.spinner{width:18px; height:18px; border:3px solid #2a345c; border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite}
+			@keyframes spin{to{transform:rotate(360deg)}}
+			.row{display:flex; gap:8px; align-items:center}
+			.error{color:var(--bad); font-weight:600}
+			.info{color:var(--warn)}
+			.kicker{display:flex; justify-content:space-between; gap:8px; align-items:center; margin:8px 0 12px}
+			.kicker small{color:var(--muted)}
+			code{background:#0e1530; padding:2px 6px; border:1px solid #2a345c; border-radius:6px}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>Codeforces 直接対決チェッカー</h1>
+			<p>2 つのハンドルを入力して、共通参加コンテストの順位を比較・集計します。</p>
+		</header>
+
+		<main class="container">
+			<section class="card grid inputs" id="inputs">
+				<input id="h1" inputmode="latin" autocomplete="username" placeholder="例: tourist" />
+				<div class="swap">
+					<button id="swap" class="btn secondary" title="左右を入れ替え">⇄ 入れ替え</button>
+					<button id="compare" class="btn">比較する</button>
+				</div>
+				<input id="h2" inputmode="latin" autocomplete="username" placeholder="例: potato167" />
+			</section>
+
+			<section class="card" style="margin-top:12px" id="panel">
+				<div class="kicker">
+					<div class="row" id="status"><span class="muted">ハンドルを入力して「比較する」を押してください。</span></div>
+					<div class="actions">
+						<button id="toggleSort" class="btn secondary" title="日時の並び順を切り替え">日時: 旧→新</button>
+						<button id="filterA" class="btn secondary" title="A が勝っているコンテストのみ表示">A勝ちのみ: OFF</button>
+						<button id="filterB" class="btn secondary" title="B が勝っているコンテストのみ表示">B勝ちのみ: OFF</button>
+						<input id="monthsN" class="mini" placeholder="直近Nヶ月" inputmode="numeric" title="空 or 不正値なら全期間" />
+						<button id="share" class="btn secondary" title="URL にハンドルを埋め込んで共有">共有リンク</button>
+						<button id="exportCsv" class="btn secondary" title="共通参加戦績を CSV で保存">CSV</button>
+					</div>
+				</div>
+				<div class="summary" id="summary" hidden>
+					<span class="pill" id="sum-overlap"></span>
+					<span class="pill good" id="sum-a"></span>
+					<span class="pill bad" id="sum-b"></span>
+					<span class="pill warn" id="sum-ties"></span>
+					<span class="pill" id="sum-latest"></span>
+				</div>
+				<div class="table-wrap" style="margin-top:12px" id="tableWrap" hidden>
+					<table id="table">
+						<thead>
+							<tr>
+								<th>日時</th>
+								<th>コンテスト</th>
+								<th id="thA">A 順位</th>
+								<th id="thB">B 順位</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</section>
+
+			<section class="card" style="margin-top:12px">
+				<details>
+					<summary>使い方・注意点</summary>
+					<ul>
+						<li>Codeforces 公式 API <code>/api/user.rating?handle=...</code> を使用します（公開レーティング更新履歴）。</li>
+						<li>勝敗は「同一コンテストに両者が参加」かつ「順位が小さい方が勝ち」で判定します（同順位は引き分け）。</li>
+						<li>共有リンクを使うと、URL クエリにハンドルが入ります（例: <code>?a=handle1&b=handle2</code>）。</li>
+						<li>API レート制限にかからないよう、短時間の連打は避けてください。失敗時は少し待って再実行を。</li>
+					</ul>
+				</details>
+			</section>
+
+			<!--<div class="footer">© 2025 — GitHub Pages で自由にホストできます。</div>-->
+		</main>
+
+		<script>
+			const qs = (s, el=document) => el.querySelector(s);
+			const h1 = qs('#h1');
+			const h2 = qs('#h2');
+			const btnCompare = qs('#compare');
+			const btnSwap = qs('#swap');
+			const btnShare = qs('#share');
+			const btnCsv = qs('#exportCsv');
+			const btnSort = qs('#toggleSort');
+			const btnFilter = qs('#filterA');
+			const btnFilterB = qs('#filterB');
+			const inpMonths = qs('#monthsN');
+			const status = qs('#status');
+			const table = qs('#table');
+			const tbody = table.querySelector('tbody');
+			const summary = qs('#summary');
+			const tableWrap = qs('#tableWrap');
+			const thA = qs('#thA');
+			const thB = qs('#thB');
+
+			// state for view
+			let sortDesc = true;     // false: 旧→新, true: 新→旧
+			let filterMode = 'ALL';   // 'ALL' | 'A' | 'B'
+			let lastRenderedRows = []; // 現在の表示行（CSV用） // 現在の表示行（CSV用）
+
+			// restore from URL
+			const params = new URLSearchParams(location.search);
+			if(params.get('a')) h1.value = params.get('a');
+			if(params.get('b')) h2.value = params.get('b');
+
+			function setStatus(node){
+				status.innerHTML = '';
+				if(node instanceof Node){ status.appendChild(node); }
+				else if(typeof node === 'string'){ status.innerHTML = node; }
+			}
+
+			function spinner(text){
+				const row = document.createElement('div'); row.className='row';
+				const sp = document.createElement('div'); sp.className='spinner';
+				const span = document.createElement('span'); span.textContent = text;
+				span.style.marginLeft = '8px'; span.className='muted';
+				row.append(sp, span); return row;
+			}
+
+			function pill(txt, cls='pill'){ const s=document.createElement('span'); s.className=cls; s.textContent=txt; return s; }
+
+			function fmtDate(ts){
+				const d = new Date(ts*1000);
+				const y = d.getFullYear();
+				const m = String(d.getMonth()+1).padStart(2,'0');
+				const day = String(d.getDate()).padStart(2,'0');
+				const hh = String(d.getHours()).padStart(2,'0');
+				const mm = String(d.getMinutes()).padStart(2,'0');
+				return `${y}-${m}-${day} ${hh}:${mm}`;
+			}
+
+			async function fetchRatings(handle){
+				const url = `https://codeforces.com/api/user.rating?handle=${encodeURIComponent(handle)}`;
+				const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+				if(!res.ok) throw new Error(`HTTP ${res.status}`);
+				const data = await res.json();
+				if(data.status !== 'OK') throw new Error(data.comment || 'API error');
+				return data.result; // array of rating updates
+			}
+
+			function toMapByContest(updates){
+				const mp = new Map();
+				for(const u of updates){
+					// If a user has multiple entries of same contest (rare), keep best (smallest rank)
+					const cur = mp.get(u.contestId);
+					if(!cur || u.rank < cur.rank){
+						mp.set(u.contestId, { rank: u.rank, name: u.contestName, time: u.ratingUpdateTimeSeconds });
+					}
+				}
+				return mp;
+			}
+
+			function csvEscape(s){
+				if(s == null) return '';
+				const t = String(s);
+				return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t;
+			}
+
+			function downloadCsv(rows, filename){
+				const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+				const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+				const a = document.createElement('a');
+				a.href = URL.createObjectURL(blob);
+				a.download = filename;
+				a.click();
+				URL.revokeObjectURL(a.href);
+			}
+
+			function getCutoffMs(){
+				if (!inpMonths) return null;
+				const raw = inpMonths.value.trim();
+				if (raw && /^\d{1,4}$/.test(raw)) {
+					const N = parseInt(raw, 10);
+					if (Number.isFinite(N) && N >= 0) {
+						const base = new Date(); base.setHours(0,0,0,0);
+						const cutoff = new Date(base); cutoff.setMonth(cutoff.getMonth() - N);
+						return cutoff.getTime();
+					}
+				}
+				return null; // 空・非数・負・5桁以上 → フィルタ無効（全期間）
+			}
+
+			function updateSummary(rows){
+				const a = h1.value.trim();
+				const b = h2.value.trim();
+
+				let winA = 0, winB = 0, ties = 0;
+				for (const r of rows) {
+					if (r.rankA < r.rankB) winA++;
+					else if (r.rankA > r.rankB) winB++;
+					else ties++;
+				}
+				const latestTs = rows.length ? rows[rows.length - 1].time : null;
+
+				const elOverlap = qs('#sum-overlap');
+				const elA = qs('#sum-a');
+				const elB = qs('#sum-b');
+				const elTies = qs('#sum-ties');
+				const elLatest = qs('#sum-latest');
+
+				if (elOverlap) elOverlap.textContent = `共通 ${rows.length} コンテスト`;
+				if (elA) elA.textContent = `${a} 勝ち: ${winA}`;
+				if (elB) elB.textContent = `${b} 勝ち: ${winB}`;
+				if (elTies) elTies.textContent = `引き分け: ${ties}`;
+				if (elLatest) elLatest.textContent = latestTs ? `最新: ${fmtDate(latestTs)}` : '最新: -';
+			}
+
+			function renderTable(){
+				/*
+				let rows = [...(compare._rows || [])];
+
+				// 月フィルタ（空・非数・負・5桁以上 → 無効）
+				const cutoffMs = getCutoffMs();
+				if (cutoffMs !== null) {
+					rows = rows.filter(r => (r.time * 1000) >= cutoffMs);
+				}
+
+				// 勝敗フィルタ
+				if (filterMode === 'A') rows = rows.filter(r => r.rankA < r.rankB);
+				if (filterMode === 'B') rows = rows.filter(r => r.rankB < r.rankA);
+
+				// 並び順
+				rows.sort((x,y)=> sortDesc ? (y.time - x.time) : (x.time - y.time));*/
+
+				// まず全件
+				const all = [...(compare._rows || [])];
+
+				// 月フィルタ（空・非数・負・5桁以上 → 無効＝全期間）
+				let cutoffMs = null;
+				if (inpMonths) {
+					const raw = inpMonths.value.trim();
+					if (raw && /^\d{1,4}$/.test(raw)) {
+						const N = parseInt(raw, 10);
+						if (Number.isFinite(N) && N >= 0) {
+							const base = new Date(); base.setHours(0,0,0,0);
+							const cutoff = new Date(base); cutoff.setMonth(cutoff.getMonth() - N);
+							cutoffMs = cutoff.getTime();
+						}
+					}
+				}
+				// ← サマリーは「ユーザー名＋Nヶ月」だけを見る（A/B フィルタは無視）
+				const summaryRows = cutoffMs === null ? all : all.filter(r => (r.time * 1000) >= cutoffMs);
+				if (!summary.hidden) { updateSummary(summaryRows); }
+
+				// テーブル用の行は、ここから勝敗フィルタを適用
+				let rows = [...summaryRows];
+				if (filterMode === 'A') rows = rows.filter(r => r.rankA < r.rankB);
+				if (filterMode === 'B') rows = rows.filter(r => r.rankB < r.rankA);
+
+				// 並び順
+				rows.sort((x,y)=> sortDesc ? (y.time - x.time) : (x.time - y.time));
+
+				// テーブル描画
+				tbody.innerHTML = '';
+				for (const r of rows) {
+					const winA = r.rankA < r.rankB;
+					const winB = r.rankB < r.rankA;
+					const tr = document.createElement('tr');
+					tr.innerHTML = `
+			<td><span class="muted">${fmtDate(r.time)}</span></td>
+			<td><a href="https://codeforces.com/contest/${r.cid}" target="_blank" rel="noopener">${r.name}</a> <span class="tag">#${r.cid}</span></td>
+			<td class="rank ${winA?'winner':''}">${r.rankA}</td>
+			<td class="rank ${winB?'winner':''}">${r.rankB}</td>
+		`;
+					tbody.appendChild(tr);
+				}
+				tableWrap.hidden = rows.length === 0;
+				lastRenderedRows = rows;
+
+				// コントロール表示の更新
+				if (btnSort)    btnSort.textContent   = `日時: ${sortDesc ? '新→旧' : '旧→新'}`;
+				if (btnFilter)  btnFilter.textContent = `A勝ちのみ: ${filterMode==='A' ? 'ON' : 'OFF'}`;
+				if (btnFilterB) btnFilterB.textContent= `B勝ちのみ: ${filterMode==='B' ? 'ON' : 'OFF'}`;
+
+				// ← ここが今回のポイント：サマリーも“現在の絞り込み結果”で更新
+				if (!summary.hidden) {
+					updateSummary(summaryRows);
+				}
+
+				// CSV（現在の表示内容）
+				const a = h1.value.trim();
+				const b = h2.value.trim();
+				btnCsv.onclick = () => {
+					const header = ['time','contestId','contestName', `${a}_rank`, `${b}_rank`];
+					const out = [header];
+					for (const r of rows) {
+						out.push([fmtDate(r.time), r.cid, r.name, r.rankA, r.rankB]);
+					}
+					downloadCsv(out, `cf_h2h_${a}_vs_${b}.csv`);
+				};
+			}
+
+			async function compare(){
+				const a = h1.value.trim();
+				const b = h2.value.trim();
+				if(!a || !b){ setStatus('<span class="error">ハンドルを 2 つ入力してください。</span>'); return; }
+				if(a.toLowerCase() === b.toLowerCase()){ setStatus('<span class="error">同じハンドルは比較できません。</span>'); return; }
+
+				thA.textContent = `${a} 順位`;
+				thB.textContent = `${b} 順位`;
+
+				setStatus(spinner('Codeforces API から取得中…'));
+				summary.hidden = true; tableWrap.hidden = true; tbody.innerHTML = '';
+
+				try{
+					// simple cache in-memory by handle to avoid rapid repeats within session
+					const cache = compare._cache || (compare._cache = new Map());
+					const get = async (h) => {
+						if(cache.has(h)) return cache.get(h);
+						const p = fetchRatings(h); cache.set(h, p); return p;
+					};
+
+					const [ra, rb] = await Promise.all([get(a), get(b)]);
+					const ma = toMapByContest(ra);
+					const mb = toMapByContest(rb);
+
+					// intersection by contestId
+					const rows = [];
+					for(const [cid, A] of ma){
+						if(mb.has(cid)){
+							const B = mb.get(cid);
+							rows.push({ cid, name: A.name, time: Math.max(A.time, B.time), rankA: A.rank, rankB: B.rank });
+						}
+					}
+					rows.sort((x,y)=> x.time - y.time);
+
+					if(rows.length === 0){
+						setStatus('<span class="info">共通参加のコンテストが見つかりませんでした。</span>');
+						return;
+					}
+
+					// summary
+					summary.hidden = false;
+					updateSummary(rows);
+
+					// table
+					compare._rows = rows;
+					renderTable();
+
+					const s = document.createElement('span');
+					s.className = 'muted';
+					s.textContent = '比較が完了しました。';
+					setStatus(s);
+
+				}catch(err){
+					console.error(err);
+					setStatus(`<span class="error">取得に失敗しました: ${String(err.message||err)}</span>`);
+				}
+			}
+
+			btnCompare.addEventListener('click', compare);
+			btnSort?.addEventListener('click', ()=>{ sortDesc = !sortDesc; renderTable(); });
+			btnFilter?.addEventListener('click', ()=>{
+				filterMode = (filterMode === 'A') ? 'ALL' : 'A';
+				if(filterMode === 'A' && btnFilterB) btnFilterB.textContent = 'B勝ちのみ: OFF';
+				renderTable();
+			});
+			btnFilterB?.addEventListener('click', ()=>{
+				filterMode = (filterMode === 'B') ? 'ALL' : 'B';
+				if(filterMode === 'B' && btnFilter) btnFilter.textContent = 'A勝ちのみ: OFF';
+				renderTable();
+			});
+			btnSwap.addEventListener('click', () => {
+				const t = h1.value; h1.value = h2.value; h2.value = t;
+				[thA.textContent, thB.textContent] = [thB.textContent, thA.textContent];
+			});
+			btnShare.addEventListener('click', () => {
+				const a = h1.value.trim(); const b = h2.value.trim();
+				const url = new URL(location.href);
+				if(a) url.searchParams.set('a', a); else url.searchParams.delete('a');
+				if(b) url.searchParams.set('b', b); else url.searchParams.delete('b');
+				history.replaceState(null, '', url);
+				navigator.clipboard?.writeText(url.href);
+				setStatus('<span class="muted">共有用リンクを URL に反映し、クリップボードにコピーしました。</span>');
+			});
+
+			// Enter で実行
+			for(const el of [h1, h2]) el.addEventListener('keydown', e=>{ if(e.key==='Enter') compare(); });
+
+			// 月フィルタの入力で即時反映
+			inpMonths?.addEventListener('input', renderTable);
+
+			// Auto-run if both present
+			if(h1.value && h2.value){ compare(); };
+		</script>
+	</body>
+</html>
