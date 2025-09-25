@@ -4,7 +4,7 @@ https://potato167.github.io/codeforces-vs/
 
 ディレクター : potato167
 
-その他 : ChatGPT
+その他すべて : ChatGPT
 
 
 ![](img/a.png)
