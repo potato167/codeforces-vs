@@ -56,7 +56,7 @@
 	<body>
 		<header>
 			<h1>Codeforces 直接対決チェッカー</h1>
-			<p>2 つのハンドルを入力して、共通参加コンテストの順位を比較・集計します。</p>
+			<p>ユーザ名を入力して、共通参加コンテストの順位を比較・集計します。</p>
 		</header>
 
 		<main class="container">
@@ -78,7 +78,6 @@
 						<button id="filterB" class="btn secondary" title="B が勝っているコンテストのみ表示">B勝ちのみ: OFF</button>
 						<input id="monthsN" class="mini" placeholder="直近Nヶ月" inputmode="numeric" title="空 or 不正値なら全期間" />
 						<button id="share" class="btn secondary" title="URL にハンドルを埋め込んで共有">共有リンク</button>
-						<button id="exportCsv" class="btn secondary" title="共通参加戦績を CSV で保存">CSV</button>
 					</div>
 				</div>
 				<div class="summary" id="summary" hidden>
@@ -114,8 +113,9 @@
 					</ul>
 				</details>
 			</section>
-
-			<!--<div class="footer">© 2025 — GitHub Pages で自由にホストできます。</div>-->
+			<footer class="footer">
+				<small>Data from Codeforces API · <a href="https://github.com/potato167/codeforces-vs" target="_blank" rel="noopener">Source</a></small>
+			</footer>
 		</main>
 
 		<script>
@@ -125,7 +125,6 @@
 			const btnCompare = qs('#compare');
 			const btnSwap = qs('#swap');
 			const btnShare = qs('#share');
-			const btnCsv = qs('#exportCsv');
 			const btnSort = qs('#toggleSort');
 			const btnFilter = qs('#filterA');
 			const btnFilterB = qs('#filterB');
@@ -193,22 +192,6 @@
 					}
 				}
 				return mp;
-			}
-
-			function csvEscape(s){
-				if(s == null) return '';
-				const t = String(s);
-				return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t;
-			}
-
-			function downloadCsv(rows, filename){
-				const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
-				const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-				const a = document.createElement('a');
-				a.href = URL.createObjectURL(blob);
-				a.download = filename;
-				a.click();
-				URL.revokeObjectURL(a.href);
 			}
 
 			function getCutoffMs(){
@@ -321,18 +304,6 @@
 				if (!summary.hidden) {
 					updateSummary(summaryRows);
 				}
-
-				// CSV（現在の表示内容）
-				const a = h1.value.trim();
-				const b = h2.value.trim();
-				btnCsv.onclick = () => {
-					const header = ['time','contestId','contestName', `${a}_rank`, `${b}_rank`];
-					const out = [header];
-					for (const r of rows) {
-						out.push([fmtDate(r.time), r.cid, r.name, r.rankA, r.rankB]);
-					}
-					downloadCsv(out, `cf_h2h_${a}_vs_${b}.csv`);
-				};
 			}
 
 			async function compare(){
